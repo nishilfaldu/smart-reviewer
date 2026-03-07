@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import {
   createPendingAnalysis,
@@ -67,12 +67,14 @@ export async function POST(request: Request) {
       }
 
       if (responseAnalysis.status !== "done") {
-        void startAnalysisJob({
-          id,
-          title: normalizedArticle.title,
-          articleUrl,
-          article: normalizedArticle,
-        });
+        after(
+          startAnalysisJob({
+            id,
+            title: normalizedArticle.title,
+            articleUrl,
+            article: normalizedArticle,
+          }),
+        );
       }
 
       return NextResponse.json(
@@ -89,12 +91,14 @@ export async function POST(request: Request) {
     }
 
     await createPendingAnalysis({ id, article: normalizedArticle });
-    void startAnalysisJob({
-      id,
-      title,
-      articleUrl,
-      article: normalizedArticle,
-    });
+    after(
+      startAnalysisJob({
+        id,
+        title,
+        articleUrl,
+        article: normalizedArticle,
+      }),
+    );
 
     const pending = await getAnalysisById(id);
 

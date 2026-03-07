@@ -75,15 +75,15 @@ export async function searchNews(input: {
     .filter((article): article is Required<GNewsResponse>["articles"][number] => {
       return Boolean(
         article?.id &&
-          article?.title &&
-          article.url &&
-          article.publishedAt &&
-          article.content &&
-          article.source?.id &&
-          article.source.name &&
-          article.source.url &&
-          article.source.country &&
-          article.lang,
+        article?.title &&
+        article.url &&
+        article.publishedAt &&
+        article.content &&
+        article.source?.id &&
+        article.source.name &&
+        article.source.url &&
+        article.source.country &&
+        article.lang,
       );
     })
     .map((article) => {
@@ -93,13 +93,17 @@ export async function searchNews(input: {
         throw new Error("GNews article is missing source information");
       }
 
+      const imageUrl = article.image
+        ? article.image.replace(/^http:\/\//i, "https://")
+        : null;
+
       return newsArticleSchema.parse({
         id: article.id,
         title: article.title,
         description: article.description ?? "",
         content: article.content,
         url: article.url,
-        image: article.image ?? null,
+        image: imageUrl,
         publishedAt: article.publishedAt,
         lang: article.lang,
         source: {
