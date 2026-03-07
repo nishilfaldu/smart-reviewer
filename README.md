@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Smart Reviewer
 
-## Getting Started
+Users can:
 
-First, run the development server:
+- Search recent news
+- Open a review from any article card
+- Save article metadata, summaries, and sentiment
+
+## Environment Variables
+
+Create `.env.local` with:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+GNEWS_API_KEY=your_gnews_api_key
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4.1-mini
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB=smart-reviewer
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`MONGODB_DB` is optional and defaults to `smart-reviewer`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Install dependencies and start the app:
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Routes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### `GET /api/news?q=query`
 
-## Deploy on Vercel
+Searches GNews and returns recent article metadata.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### `POST /api/analyze`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Input:
+
+```json
+{
+  "article": {
+    "id": "news-api-id",
+    "title": "Article title",
+    "description": "Article description",
+    "content": "Article content from the news API",
+    "url": "https://example.com/article",
+    "image": "https://example.com/image.jpg",
+    "publishedAt": "2025-09-30T19:38:25Z",
+    "lang": "en",
+    "source": {
+      "id": "source-id",
+      "name": "Source name",
+      "url": "https://example.com",
+      "country": "us"
+    }
+  }
+}
+```
+
+Behavior:
+
+- Creates a deterministic SHA-256 id from the normalized article URL
+- Reuses an existing analysis if one already exists
+- Otherwise stores a pending record and starts the async processing pipeline
+
+### `GET /api/result/[id]`
+
+Returns the status and result for one analysis job.
+
+### `GET /api/results`
+
+Returns all completed analyses.
+
+## Async Processing Flow
+
+1. Store the full article payload returned by the news API.
+2. Trim content to roughly 5000 characters.
+3. Generate the review output.
+4. Save the result.
+5. Update the job status for polling clients.
+
+## Project Structure
+
+```text
+app/
+  api/
+  layout.tsx
+  page.tsx
+components/
+  analysis-panel.tsx
+  article-list.tsx
+  results-table.tsx
+  search-form.tsx
+  smart-reviewer-dashboard.tsx
+lib/
+  ai.ts
+  analysis-repository.ts
+  analyze-job.ts
+  api-client.ts
+  article-id.ts
+  env.ts
+  gnews.ts
+  mongodb.ts
+  types.ts
+```
+
+## Notes
+
+- Background analysis is started from the API route in-process, which is suitable for local development and a single Node runtime. For production, move job execution to a durable queue or worker.
