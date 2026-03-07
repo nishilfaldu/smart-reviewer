@@ -1,4 +1,4 @@
-import { SmartReviewerDashboard } from "@/components/smart-reviewer-dashboard";
+import { SmartReviewerDashboard } from "@/components/search/smart-reviewer-dashboard";
 
 export default async function Home({
   searchParams,
@@ -6,7 +6,7 @@ export default async function Home({
   searchParams: Promise<{ q?: string }>;
 }) {
   const params = await searchParams;
-  const initialQuery = params.q?.trim() || "artificial intelligence";
+  const initialQuery = params.q?.trim() || "";
 
   return <SmartReviewerDashboard initialQuery={initialQuery} />;
 }

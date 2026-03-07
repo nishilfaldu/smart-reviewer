@@ -52,6 +52,16 @@ export async function startAnalysisJob(input: {
       existing.articleContent ??
       ""
     ).trim();
+    const articleDescription = (
+      input.article?.description ??
+      existing.articleDescription ??
+      ""
+    ).trim();
+    const sourceName = (
+      input.article?.source.name ??
+      existing.sourceName ??
+      ""
+    ).trim();
 
     if (!articleText) {
       throw new Error("Article content is missing for analysis");
@@ -59,8 +69,10 @@ export async function startAnalysisJob(input: {
 
     const analysis = await analyzeArticle({
       title: input.title,
+      articleDescription,
       articleText: articleText.slice(0, 5_000),
       articleUrl: input.articleUrl,
+      sourceName,
     });
 
     await markAnalysisDone({

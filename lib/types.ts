@@ -32,6 +32,29 @@ export interface AnalysisRecord {
   errorMessage?: string | null;
 }
 
+export interface PaginatedNewsResult {
+  articles: NewsArticle[];
+  totalArticles: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface PaginatedAnalysisResult {
+  analyses: AnalysisRecord[];
+  totalAnalyses: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ReviewFilters {
+  query: string;
+  sentiment: Sentiment | "";
+  dateFrom: string;
+  dateTo: string;
+}
+
 export type ArticleAnalysis = z.infer<typeof articleAnalysisSchema>;
 
 function normalizeArticle(document: AnalysisDocument): NewsArticle {
@@ -42,9 +65,7 @@ function normalizeArticle(document: AnalysisDocument): NewsArticle {
     content: document.articleContent ?? "",
     url: document.articleUrl,
     image: document.articleImage ?? null,
-    publishedAt:
-      document.articlePublishedAt?.toISOString() ??
-      document.createdAt.toISOString(),
+    publishedAt: document.articlePublishedAt.toISOString(),
     lang: document.articleLanguage ?? "en",
     source: {
       id: document.sourceId ?? "",

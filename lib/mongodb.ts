@@ -5,9 +5,7 @@ import type { AnalysisDocument } from "@/lib/types";
 
 declare global {
   var __smartReviewerMongoClientPromise: Promise<MongoClient> | undefined;
-  var __smartReviewerAnalysesCollectionPromise:
-    | Promise<Collection<AnalysisDocument>>
-    | undefined;
+  var __smartReviewerIndexesPromise: Promise<void> | undefined;
 }
 
 async function createClient(): Promise<MongoClient> {
@@ -31,17 +29,23 @@ export async function getDatabase(): Promise<Db> {
 export async function getAnalysesCollection(): Promise<
   Collection<AnalysisDocument>
 > {
-  globalThis.__smartReviewerAnalysesCollectionPromise ??= (async () => {
-    const database = await getDatabase();
-    const collection = database.collection<AnalysisDocument>("analyses");
+  const database = await getDatabase();
+  return database.collection<AnalysisDocument>("analyses");
+}
 
+/**
+ * Ensure required indexes exist. Cached behind a global promise so it
+ * runs exactly once per process lifetime — subsequent calls resolve
+ * instantly without a network round trip.
+ */
+export function ensureIndexes(): Promise<void> {
+  globalThis.__smartReviewerIndexesPromise ??= (async () => {
+    const collection = await getAnalysesCollection();
     await Promise.all([
       collection.createIndex({ status: 1, createdAt: -1 }),
-      collection.createIndex({ articleUrl: 1 }, { unique: true }),
+      collection.createIndex({ status: 1, sentiment: 1, createdAt: -1 }),
     ]);
-
-    return collection;
   })();
 
-  return globalThis.__smartReviewerAnalysesCollectionPromise;
+  return globalThis.__smartReviewerIndexesPromise;
 }

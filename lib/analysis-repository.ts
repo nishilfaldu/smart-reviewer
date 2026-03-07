@@ -4,12 +4,17 @@ import {
   parseAnalysisDocument,
   parseAnalysisDocuments,
 } from "@/lib/analysis-document";
-import { getAnalysesCollection } from "@/lib/mongodb";
+import { ensureIndexes, getAnalysesCollection } from "@/lib/mongodb";
+import type { Filter } from "mongodb";
+
+// Fire once per process lifetime — the promise is globally cached so
+// subsequent imports resolve instantly with no network round trip.
+void ensureIndexes();
 import type {
   AnalysisDocument,
-  AnalysisRecord,
   ArticleAnalysis,
   NewsArticle,
+  PaginatedAnalysisResult,
 } from "@/lib/types";
 import { serializeAnalysis } from "@/lib/types";
 
@@ -126,12 +131,71 @@ export async function markAnalysisFailed(
   return document ? parseAnalysisDocument(document) : null;
 }
 
-export async function listCompletedAnalyses(): Promise<AnalysisRecord[]> {
+export async function listCompletedAnalyses(input: {
+  page: number;
+  pageSize: number;
+  query?: string;
+  sentiment?: ArticleAnalysis["sentiment"];
+  dateFrom?: Date;
+  dateTo?: Date;
+}): Promise<PaginatedAnalysisResult> {
+  const page = Math.max(1, Math.floor(input.page));
+  const pageSize = Math.max(1, Math.floor(input.pageSize));
   const collection = await getAnalysesCollection();
-  const documents = await collection
-    .find({ status: "done" })
-    .sort({ createdAt: -1 })
-    .toArray();
+  const filters: Filter<AnalysisDocument> = {
+    status: "done",
+  };
 
-  return parseAnalysisDocuments(documents).map(serializeAnalysis);
+  if (input.sentiment) {
+    filters.sentiment = input.sentiment;
+  }
+
+  if (input.dateFrom || input.dateTo) {
+    filters.articlePublishedAt = {};
+
+    if (input.dateFrom) {
+      filters.articlePublishedAt.$gte = input.dateFrom;
+    }
+
+    if (input.dateTo) {
+      filters.articlePublishedAt.$lte = input.dateTo;
+    }
+  }
+
+  if (input.query?.trim()) {
+    const pattern = escapeForRegex(input.query.trim());
+    const regex = new RegExp(pattern, "i");
+
+    filters.$or = [
+      { title: regex },
+      { sourceName: regex },
+      { articleDescription: regex },
+      { summary: regex },
+    ];
+  }
+
+  const [documents, totalAnalyses] = await Promise.all([
+    collection
+      .find(filters)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .toArray(),
+    collection.countDocuments(filters),
+  ]);
+  const analyses = parseAnalysisDocuments(documents).map(serializeAnalysis);
+  const totalPages =
+    totalAnalyses > 0 ? Math.ceil(totalAnalyses / pageSize) : 0;
+
+  return {
+    analyses,
+    totalAnalyses,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

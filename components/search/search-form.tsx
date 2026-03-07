@@ -1,9 +1,11 @@
 "use client";
 
+import type { FormEvent } from "react";
+
 interface SearchFormProps {
   query: string;
   onQueryChange: (value: string) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isLoading: boolean;
 }
 
@@ -34,7 +36,7 @@ export function SearchForm({
           disabled={isLoading}
           className="min-h-14 rounded-[1.35rem] bg-slate-950 px-6 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isLoading ? "Searching..." : "Search News"}
+          {isLoading ? "Searching..." : "Search news"}
         </button>
       </div>
     </form>

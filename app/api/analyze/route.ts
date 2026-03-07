@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   createPendingAnalysis,
   getAnalysisById,
+  markAnalysisProcessing,
   syncAnalysisArticle,
 } from "@/lib/analysis-repository";
 import { startAnalysisJob } from "@/lib/analyze-job";
@@ -58,8 +59,14 @@ export async function POST(request: Request) {
 
     if (existing) {
       const synced = await syncAnalysisArticle({ id, article: normalizedArticle });
+      let responseAnalysis = synced ?? existing;
 
-      if (existing.status !== "done") {
+      if (responseAnalysis.status === "error") {
+        responseAnalysis =
+          (await markAnalysisProcessing(id)) ?? responseAnalysis;
+      }
+
+      if (responseAnalysis.status !== "done") {
         void startAnalysisJob({
           id,
           title: normalizedArticle.title,
@@ -71,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           id,
-          analysis: serializeAnalysis(synced ?? existing),
+          analysis: serializeAnalysis(responseAnalysis),
         },
         {
           headers: {

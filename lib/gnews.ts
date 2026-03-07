@@ -1,8 +1,9 @@
 import { getGNewsApiKey } from "@/lib/env";
 import { newsArticleSchema } from "@/lib/schemas";
-import type { NewsArticle } from "@/lib/types";
+import type { PaginatedNewsResult } from "@/lib/types";
 
 interface GNewsResponse {
+  totalArticles?: number;
   articles?: Array<{
     id?: string;
     title?: string;
@@ -21,17 +22,31 @@ interface GNewsResponse {
   }>;
 }
 
-export async function searchNews(query: string): Promise<NewsArticle[]> {
-  const trimmedQuery = query.trim();
+const GNEWS_PAGE_SIZE = 10;
+const GNEWS_MAX_ARTICLES = 1_000;
+
+export async function searchNews(input: {
+  query: string;
+  page: number;
+}): Promise<PaginatedNewsResult> {
+  const trimmedQuery = input.query.trim();
+  const page = Math.max(1, Math.floor(input.page));
 
   if (!trimmedQuery) {
-    return [];
+    return {
+      articles: [],
+      totalArticles: 0,
+      page: 1,
+      pageSize: GNEWS_PAGE_SIZE,
+      totalPages: 0,
+    };
   }
 
   const searchParams = new URLSearchParams({
     q: trimmedQuery,
     lang: "en",
-    max: "10",
+    max: String(GNEWS_PAGE_SIZE),
+    page: String(page),
     sortby: "publishedAt",
     apikey: getGNewsApiKey(),
   });
@@ -56,19 +71,19 @@ export async function searchNews(query: string): Promise<NewsArticle[]> {
 
   const payload = (await response.json()) as GNewsResponse;
 
-  return (payload.articles ?? [])
+  const articles = (payload.articles ?? [])
     .filter((article): article is Required<GNewsResponse>["articles"][number] => {
       return Boolean(
         article?.id &&
-        article?.title &&
-        article.url &&
-        article.publishedAt &&
-        article.content &&
-        article.source?.id &&
-        article.source.name &&
-        article.source.url &&
-        article.source.country &&
-        article.lang,
+          article?.title &&
+          article.url &&
+          article.publishedAt &&
+          article.content &&
+          article.source?.id &&
+          article.source.name &&
+          article.source.url &&
+          article.source.country &&
+          article.lang,
       );
     })
     .map((article) => {
@@ -95,4 +110,19 @@ export async function searchNews(query: string): Promise<NewsArticle[]> {
         },
       });
     });
+
+  const totalArticles = Math.min(
+    Math.max(payload.totalArticles ?? articles.length, articles.length),
+    GNEWS_MAX_ARTICLES,
+  );
+  const totalPages =
+    totalArticles > 0 ? Math.ceil(totalArticles / GNEWS_PAGE_SIZE) : 0;
+
+  return {
+    articles,
+    totalArticles,
+    page,
+    pageSize: GNEWS_PAGE_SIZE,
+    totalPages,
+  };
 }

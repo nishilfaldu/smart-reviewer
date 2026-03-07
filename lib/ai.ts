@@ -11,8 +11,10 @@ const openai = createOpenAI({
 
 export async function analyzeArticle(input: {
   title: string;
+  articleDescription?: string;
   articleText: string;
   articleUrl: string;
+  sourceName?: string;
 }): Promise<ArticleAnalysis> {
   const { object } = await generateObject({
     model: openai(getOpenAiModel()),
@@ -24,10 +26,17 @@ export async function analyzeArticle(input: {
 
 Title: ${input.title}
 URL: ${input.articleUrl}
+Source: ${input.sourceName?.trim() || "Unknown source"}
+Description: ${input.articleDescription?.trim() || "None provided"}
 
 Tasks:
 1. Write a concise summary in 3 to 5 sentences.
-2. Classify the article's overall sentiment as positive, neutral, or negative.
+2. Classify the article's overall sentiment using one of these levels:
+   - very_positive: celebratory, breakthrough, overwhelmingly optimistic
+   - positive: generally favorable, hopeful, constructive
+   - neutral: factual reporting, balanced, no clear lean
+   - negative: critical, concerning, pessimistic
+   - very_negative: alarming, crisis-level, strongly condemning
 
 Article content:
 ${input.articleText}`,
