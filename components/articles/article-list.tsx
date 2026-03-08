@@ -1,4 +1,3 @@
-"use client";
 
 import { ArticleCard } from "@/components/articles/article-card";
 import { PaginationControls } from "@/components/ui/pagination-controls";

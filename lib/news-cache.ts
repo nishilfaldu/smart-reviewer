@@ -1,3 +1,11 @@
+// NOTE: This in-memory cache uses a globalThis Map with a 5-minute TTL.
+// It works well for long-lived Node processes where the same Map persists
+// across requests. On Vercel serverless, however, each invocation may run
+// in a fresh container with an empty global scope, making this cache
+// unreliable. The implementation is kept here for reference (and for local
+// development with a persistent Node process) but is no longer used by
+// the /api/news route.
+
 import type { PaginatedNewsResult } from "@/lib/types";
 
 interface CacheEntry {

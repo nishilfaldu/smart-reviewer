@@ -1,4 +1,3 @@
-"use client";
 
 import type { ReviewFilters } from "@/lib/types";
 

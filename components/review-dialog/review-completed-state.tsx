@@ -1,4 +1,3 @@
-"use client";
 
 import { formatSentimentLabel, getSentimentClasses } from "@/lib/display";
 import type { AnalysisRecord, NewsArticle } from "@/lib/types";

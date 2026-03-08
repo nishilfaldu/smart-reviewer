@@ -82,6 +82,10 @@ export function getReviewStartErrorMessage(): string {
   return "Couldn’t start this review right now. Please try again.";
 }
 
+export function getReviewPollingErrorMessage(): string {
+  return "This review couldn’t be refreshed right now. Please retry.";
+}
+
 export function getReviewsLoadErrorMessage(): string {
   return "Couldn’t load completed reviews right now. Please try again in a moment.";
 }

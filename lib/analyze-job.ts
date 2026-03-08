@@ -7,12 +7,19 @@ import {
 import { analyzeArticle } from "@/lib/ai";
 import type { NewsArticle } from "@/lib/types";
 
-declare global {
-  var __smartReviewerActiveJobs: Set<string> | undefined;
-}
+// NOTE: A previous implementation used a globalThis Set<string> to track
+// in-flight jobs and prevent duplicate concurrent analyses. That approach
+// works well for long-lived Node processes but is unreliable on serverless
+// runtimes like Vercel where each invocation may run in a different container
+// with its own empty global scope. The MongoDB record status is used as the
+// single source of truth instead.
 
-const activeJobs = globalThis.__smartReviewerActiveJobs ?? new Set<string>();
-globalThis.__smartReviewerActiveJobs = activeJobs;
+// declare global {
+//   var __smartReviewerActiveJobs: Set<string> | undefined;
+// }
+//
+// const activeJobs = globalThis.__smartReviewerActiveJobs ?? new Set<string>();
+// globalThis.__smartReviewerActiveJobs = activeJobs;
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -28,12 +35,11 @@ export async function startAnalysisJob(input: {
   articleUrl: string;
   article?: NewsArticle;
 }): Promise<void> {
-  if (activeJobs.has(input.id)) {
-    return;
-  }
-
-  activeJobs.add(input.id);
-
+  // if (activeJobs.has(input.id)) {
+  //   return;
+  // }
+  //
+  // activeJobs.add(input.id);
   try {
     const existing = await getAnalysisById(input.id);
 
@@ -41,7 +47,7 @@ export async function startAnalysisJob(input: {
       throw new Error("Analysis record not found");
     }
 
-    if (existing.status === "done") {
+    if (existing.status === "done" || existing.status === "processing") {
       return;
     }
 
@@ -82,7 +88,8 @@ export async function startAnalysisJob(input: {
     });
   } catch (error) {
     await markAnalysisFailed(input.id, toErrorMessage(error));
-  } finally {
-    activeJobs.delete(input.id);
   }
+  // finally {
+  //   activeJobs.delete(input.id);
+  // }
 }

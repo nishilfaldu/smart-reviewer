@@ -1,4 +1,3 @@
-"use client";
 
 interface ReviewProgressStateProps {
   mode: "opening" | "processing";

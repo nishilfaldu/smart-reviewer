@@ -66,7 +66,10 @@ export async function POST(request: Request) {
           (await markAnalysisProcessing(id)) ?? responseAnalysis;
       }
 
-      if (responseAnalysis.status !== "done") {
+      if (
+        responseAnalysis.status !== "done" &&
+        responseAnalysis.status !== "processing"
+      ) {
         after(
           startAnalysisJob({
             id,

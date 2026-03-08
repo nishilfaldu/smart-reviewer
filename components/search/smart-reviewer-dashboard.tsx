@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { ArticleList } from "@/components/articles/article-list";
 import { ArticleReviewFlow } from "@/components/review-dialog/article-review-flow";
@@ -11,18 +11,41 @@ import { SearchForm } from "@/components/search/search-form";
 import { fetchNews } from "@/lib/api-client";
 import type { NewsArticle } from "@/lib/types";
 
+function parsePageParam(value: string | null): number {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+}
+
 export function SmartReviewerDashboard({
   initialQuery,
 }: {
   initialQuery: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const submittedQuery = searchParams.get("q")?.trim() || "";
+  const newsPage = parsePageParam(searchParams.get("page"));
   const [searchInput, setSearchInput] = useState(initialQuery);
-  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
-  const [newsPage, setNewsPage] = useState(1);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isReviewRunning, setIsReviewRunning] = useState(false);
+
+  const replaceParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams.toString());
+
+      for (const [key, value] of Object.entries(updates)) {
+        if (value) {
+          next.set(key, value);
+        } else {
+          next.delete(key);
+        }
+      }
+
+      const qs = next.toString();
+      router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   const articlesQuery = useQuery({
     queryKey: ["news", submittedQuery, newsPage],
@@ -37,22 +60,19 @@ export function SmartReviewerDashboard({
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmittedQuery(searchInput.trim());
-    setNewsPage(1);
+    replaceParams({ q: searchInput.trim() || null, page: null });
   }
 
   function handleQueryChange(value: string) {
     setSearchInput(value);
 
-    const nextQuery = value.trim();
-    const nextUrl = nextQuery ? `/?q=${encodeURIComponent(nextQuery)}` : "/";
-
-    router.replace(nextUrl, { scroll: false });
-
-    if (!nextQuery) {
-      setSubmittedQuery("");
-      setNewsPage(1);
+    if (!value.trim()) {
+      replaceParams({ q: null, page: null });
     }
+  }
+
+  function handlePageChange(page: number) {
+    replaceParams({ page: page > 1 ? String(page) : null });
   }
 
   function handleOpenReview(article: NewsArticle) {
@@ -96,8 +116,8 @@ export function SmartReviewerDashboard({
           isLoading={isSearching}
           hasError={Boolean(articlesQuery.error)}
           activeArticleUrl={selectedArticle?.url ?? null}
-          isAnalyzing={isReviewRunning}
-          onPageChange={setNewsPage}
+          isAnalyzing={isModalOpen}
+          onPageChange={handlePageChange}
           onOpenReview={handleOpenReview}
         />
       </div>
@@ -106,7 +126,6 @@ export function SmartReviewerDashboard({
         article={selectedArticle}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        onRunningChange={setIsReviewRunning}
       />
     </main>
   );

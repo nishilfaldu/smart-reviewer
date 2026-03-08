@@ -1,7 +1,8 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { ArticleReviewModal } from "@/components/review-dialog/article-review-modal";
 import { ReviewArchiveCard } from "@/components/reviews/review-archive-card";
@@ -11,25 +12,55 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { fetchCompletedAnalyses } from "@/lib/api-client";
 import { getReviewsLoadErrorMessage } from "@/lib/display";
 import type { AnalysisRecord, ReviewFilters } from "@/lib/types";
+import { useState } from "react";
 
-const EMPTY_FILTERS: ReviewFilters = {
-  query: "",
-  sentiment: "",
-  dateFrom: "",
-  dateTo: "",
-};
+function parsePageParam(value: string | null): number {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+}
+
+function filtersFromParams(params: URLSearchParams): ReviewFilters {
+  return {
+    query: params.get("q")?.trim() || "",
+    sentiment: (params.get("sentiment") as ReviewFilters["sentiment"]) || "",
+    dateFrom: params.get("dateFrom") || "",
+    dateTo: params.get("dateTo") || "",
+  };
+}
 
 export function ReviewsDashboard() {
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<ReviewFilters>(EMPTY_FILTERS);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const page = parsePageParam(searchParams.get("page"));
+  const filters = filtersFromParams(searchParams);
+  const deferredQuery = useDeferredValue(filters.query);
+  const activeFilters = { ...filters, query: deferredQuery };
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisRecord | null>(
     null,
   );
-  const deferredQuery = useDeferredValue(filters.query);
-  const activeFilters = {
-    ...filters,
-    query: deferredQuery,
-  };
+
+  function replaceParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(searchParams.toString());
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) {
+        next.set(key, value);
+      } else {
+        next.delete(key);
+      }
+    }
+
+    const qs = next.toString();
+    router.replace(qs ? `/reviews?${qs}` : "/reviews", { scroll: false });
+  }
+
+  function updateFilter(key: string, value: string) {
+    replaceParams({ [key]: value || null, page: null });
+  }
+
+  function clearFilters() {
+    router.replace("/reviews", { scroll: false });
+  }
 
   const reviewsQuery = useQuery({
     queryKey: [
@@ -49,14 +80,6 @@ export function ReviewsDashboard() {
   const hasActiveFilters = Boolean(
     filters.query || filters.sentiment || filters.dateFrom || filters.dateTo,
   );
-
-  function updateFilters(nextFilters: Partial<ReviewFilters>) {
-    setPage(1);
-    setFilters((current) => ({
-      ...current,
-      ...nextFilters,
-    }));
-  }
 
   return (
     <main className="min-h-[calc(100vh-89px)] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(249,115,22,0.12),_transparent_32%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_45%,_#f8fafc_100%)] px-4 py-8 text-slate-950 md:px-8 lg:px-12">
@@ -81,14 +104,11 @@ export function ReviewsDashboard() {
 
         <ReviewsFilters
           filters={filters}
-          onQueryChange={(value) => updateFilters({ query: value })}
-          onSentimentChange={(value) => updateFilters({ sentiment: value })}
-          onDateFromChange={(value) => updateFilters({ dateFrom: value })}
-          onDateToChange={(value) => updateFilters({ dateTo: value })}
-          onClear={() => {
-            setPage(1);
-            setFilters({ ...EMPTY_FILTERS });
-          }}
+          onQueryChange={(value) => updateFilter("q", value)}
+          onSentimentChange={(value) => updateFilter("sentiment", value)}
+          onDateFromChange={(value) => updateFilter("dateFrom", value)}
+          onDateToChange={(value) => updateFilter("dateTo", value)}
+          onClear={clearFilters}
         />
 
         <section className="space-y-4">
@@ -148,7 +168,9 @@ export function ReviewsDashboard() {
                 currentPage={results?.page ?? page}
                 totalPages={results?.totalPages ?? 0}
                 isLoading={reviewsQuery.isFetching}
-                onPageChange={setPage}
+                onPageChange={(p) =>
+                  replaceParams({ page: p > 1 ? String(p) : null })
+                }
               />
             </div>
           ) : null}
