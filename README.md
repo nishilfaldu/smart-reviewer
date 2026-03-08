@@ -1,32 +1,25 @@
 # Smart Reviewer
 
-A single-page web app that searches real-time news articles, generates AI-powered summaries with sentiment analysis, and stores structured results in MongoDB.
+Smart Reviewer is a Next.js app for searching recent news, generating an AI review for an article, and browsing completed reviews in a separate archive.
 
-**Tech stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · MongoDB · OpenAI (via Vercel AI SDK) · Zod · React Query
+It is built with Next.js App Router, React, TypeScript, Tailwind CSS, MongoDB, React Query, Zod, and the Vercel AI SDK.
 
-Users can:
+## What It Does
 
-- Search recent news articles via GNews
-- Select any article to trigger an AI review (summary + sentiment)
-- Browse all completed reviews in a dedicated archive with filters and pagination
+- Search recent articles from GNews
+- Open any article in a review modal
+- Generate a summary and sentiment classification
+- Retry failed reviews
+- Refresh completed reviews and overwrite the stored article fields with the latest payload you opened
+- Browse completed reviews on `/reviews` with filters and pagination
 
-## Environment Variables
+## Setup
 
-Copy the template and fill in your keys:
+Create a local env file:
 
 ```bash
 cp .env.example .env.local
 ```
-
-| Variable | Required | Description |
-|---|---|---|
-| `GNEWS_API_KEY` | Yes | API key from [gnews.io](https://gnews.io/) |
-| `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `OPENAI_MODEL` | No | Model name, defaults to `gpt-4.1-mini` |
-| `MONGODB_URI` | Yes | MongoDB connection string |
-| `MONGODB_DB` | No | Database name, defaults to `smart-reviewer` |
-
-## Setup
 
 Install dependencies and start the app:
 
@@ -37,22 +30,29 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Deployment
+## Environment Variables
 
-The app runs on any platform that supports Next.js (Vercel, Railway, Render, etc.):
+| Variable | Required | Description |
+|---|---|---|
+| `GNEWS_API_KEY` | Yes | API key from [GNews](https://gnews.io/) |
+| `OPENAI_API_KEY` | Yes | OpenAI API key |
+| `OPENAI_MODEL` | No | Model name, defaults to `gpt-4.1-mini` |
+| `MONGODB_URI` | Yes | MongoDB Atlas or MongoDB connection string |
+| `MONGODB_DB` | No | Database name, defaults to `smart-reviewer` |
 
-1. Push the repo to GitHub.
-2. Connect the repo to your hosting platform.
-3. Set the environment variables listed above.
-4. Deploy — the platform will run `next build` automatically.
+## Review Flow
 
-For Vercel specifically, no extra config is needed.
+1. Search for articles on the main page.
+2. Open an article review.
+3. The app calls `POST /api/analyze` to ensure a review exists and to get its latest state.
+4. If the review is still running, the client polls until it reaches `done` or `error`.
+5. Completed reviews can be refreshed. Failed reviews can be retried.
 
-## API Routes
+## API Summary
 
 ### `GET /api/news?q=query&page=1`
 
-Searches GNews and returns paginated article metadata. Results are cached in-memory for 5 minutes to conserve the 100 requests/day free-tier limit.
+Searches GNews and returns paginated article results.
 
 | Param | Required | Description |
 |---|---|---|
@@ -61,7 +61,9 @@ Searches GNews and returns paginated article metadata. Results are cached in-mem
 
 ### `POST /api/analyze`
 
-Input:
+Ensures an analysis exists for the article URL and returns the current record.
+
+Request body:
 
 ```json
 {
@@ -69,10 +71,10 @@ Input:
     "id": "news-api-id",
     "title": "Article title",
     "description": "Article description",
-    "content": "Article content from the news API",
+    "content": "Article content from GNews",
     "url": "https://example.com/article",
     "image": "https://example.com/image.jpg",
-    "publishedAt": "2025-09-30T19:38:25Z",
+    "publishedAt": "2026-03-08T10:30:00Z",
     "lang": "en",
     "source": {
       "id": "source-id",
@@ -80,43 +82,46 @@ Input:
       "url": "https://example.com",
       "country": "us"
     }
-  }
+  },
+  "retry": false,
+  "refresh": false
 }
 ```
 
 Behavior:
 
-- Creates a deterministic SHA-256 id from the normalized article URL
-- Reuses an existing analysis if one already exists
-- Otherwise stores a pending record and starts the async processing pipeline
+- New article: creates a pending record and starts the review
+- Existing `pending` or `processing` record: returns current status
+- Existing `error` record: returns current status unless `retry: true`
+- Existing `done` record: returns current status unless `refresh: true`
 
 ### `GET /api/result/[id]`
 
-Returns the status and result for one analysis job.
+Returns the current state for one review.
 
-### `GET /api/results`
+### `GET /api/results?page=1&q=&sentiment=&publishedFrom=&publishedTo=`
 
-Returns paginated, filterable completed analyses.
+Returns paginated completed reviews.
 
 | Param | Required | Description |
 |---|---|---|
 | `page` | No | Page number, defaults to `1` |
-| `q` | No | Search across title, publisher, description, and summary |
-| `sentiment` | No | Filter by sentiment level (e.g. `positive`, `very_negative`) |
-| `dateFrom` | No | Filter articles published on or after this date |
-| `dateTo` | No | Filter articles published on or before this date |
+| `q` | No | Search across title, description, source name, and summary |
+| `sentiment` | No | One of `very_positive`, `positive`, `neutral`, `negative`, `very_negative` |
+| `publishedFrom` | No | Lower UTC timestamp boundary |
+| `publishedTo` | No | Upper UTC timestamp boundary |
 
-## Async Processing Flow
+Note: the `/reviews` page keeps `dateFrom` and `dateTo` in the browser URL for the UI, then converts those local-day selections into exact UTC boundaries before calling `/api/results`.
 
-1. Store the full article payload returned by the news API.
-2. Trim content to roughly 5000 characters.
-3. Generate the review output (summary + sentiment) in a single structured API call.
-4. Save the result to MongoDB.
-5. Update the job status for polling clients.
+## Data Model
 
-## Sentiment Classification
+Each stored review keeps:
 
-Sentiment is classified on a five-level scale: **very positive**, **positive**, **neutral**, **negative**, and **very negative**. The AI prompt includes descriptions for each level to keep classifications consistent. The scale can be adjusted by editing the Zod enum in `schemas.ts` and updating the prompt in `ai.ts`.
+- Deterministic `_id` derived from the normalized article URL
+- Flattened article fields from GNews
+- Review output: `summary` and `sentiment`
+- Status: `pending`, `processing`, `done`, or `error`
+- Document timestamps: `createdAt` and `updatedAt`
 
 ## Project Structure
 
@@ -175,11 +180,32 @@ lib/
   use-modal-behavior.ts
 ```
 
-## Notes
+## Practical Notes
 
-- **Background processing**: Analysis jobs are started in-process from the API route, which works well for local development and a single Node runtime. For production, move job execution to a durable queue (e.g., BullMQ, Inngest) or a serverless task runner.
-- **GNews caching**: Search results are held in a short-lived in-memory cache (5 min TTL) to stay within the free-tier rate limit. A persistent cache (Redis, edge KV) would be more robust in production.
-- **Pagination**: Both news search and the reviews archive use server-side pagination. Switching the reviews archive from skip/limit to cursor-based pagination would improve performance at very large scale.
-- **Testing**: Unit and integration tests (Vitest + React Testing Library) for API routes and components would be a natural next step.
-- **Authentication**: There is no auth layer — any visitor can trigger analyses and view results. Adding NextAuth or Clerk would gate access appropriately.
-- **Docker Compose**: A `docker-compose.yml` with MongoDB would make local setup zero-config for contributors.
+- Reviews are based on the GNews article payload, especially its `content` field. If that source text is truncated or stale, the review will be too.
+- `articlePublishedAt` comes from the article payload. `createdAt` and `updatedAt` belong only to the stored review document.
+- The reviews page filters by the user's local day in the UI, then sends exact UTC timestamp boundaries to the backend.
+- External article images may fail on some publishers because of mixed-content rules or source-side blocking.
+- Review jobs are started from the API route and claimed atomically in MongoDB. That is fine for this app, but a durable job system would be a better production architecture at larger scale.
+
+## Deployment
+
+The app can run on platforms like Vercel, Railway, or Render:
+
+1. Push the repo to GitHub.
+2. Connect the repo to your host.
+3. Add the environment variables above.
+4. Deploy.
+
+For MongoDB Atlas, use the full Atlas connection string exactly as generated and make sure the database user and IP/network rules are configured correctly.
+
+## What I'd Improve
+
+- **Full-text extraction**: Right now reviews are based on GNews's truncated `content` field. I'd fetch the article URL server-side and pull the full body with `jsdom` + `@mozilla/readability`. Won't help with paywalled sites like Bloomberg or WSJ, but for open sources the reviews would be much better.
+- **Job queue**: Analysis jobs run inside `after()` on the API route. A real queue would let them survive deploys and retry on failure.
+- **News caching**: The in-memory GNews cache (`lib/news-cache.ts`) doesn't help much on serverless since each container gets a fresh Map. Redis or Vercel KV would actually persist across cold starts.
+- **Rate-limit handling**: When GNews returns 403/429 the user just sees a generic error. Should detect it and show something like "Daily search limit reached — try again tomorrow."
+- **Cursor pagination**: Reviews use skip/limit which gets slow on large collections. Cursor on `createdAt` + `_id` would keep page 100 as fast as page 1.
+- **Tests**: No tests yet. Would add Vitest for the repository and API routes, React Testing Library for the review flow.
+- **Auth**: Anyone can hit the app and burn OpenAI credits. Needs an auth layer.
+- **Docker Compose**: A `docker-compose.yml` with MongoDB would make local setup one command.
