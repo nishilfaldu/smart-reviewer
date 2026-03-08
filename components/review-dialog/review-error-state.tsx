@@ -3,13 +3,13 @@ import { getReviewFailureMessage } from "@/lib/display";
 
 interface ReviewErrorStateProps {
   errorMessage?: string | null;
-  isRetrying: boolean;
+  isActionPending: boolean;
   onRetry: () => void;
 }
 
 export function ReviewErrorState({
   errorMessage,
-  isRetrying,
+  isActionPending,
   onRetry,
 }: ReviewErrorStateProps) {
   return (
@@ -23,10 +23,10 @@ export function ReviewErrorState({
       <button
         type="button"
         onClick={onRetry}
-        disabled={isRetrying}
+        disabled={isActionPending}
         className="mt-5 inline-flex rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:text-rose-900 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isRetrying ? "Retrying..." : "Retry review"}
+        {isActionPending ? "Retrying..." : "Retry review"}
       </button>
     </div>
   );

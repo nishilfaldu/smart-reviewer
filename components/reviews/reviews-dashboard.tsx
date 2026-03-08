@@ -2,9 +2,9 @@
 
 import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
-import { ArticleReviewModal } from "@/components/review-dialog/article-review-modal";
+import { ArticleReviewFlow } from "@/components/review-dialog/article-review-flow";
 import { ReviewArchiveCard } from "@/components/reviews/review-archive-card";
 import { ReviewsFilters } from "@/components/reviews/reviews-filters";
 import { ReviewArchiveTable } from "@/components/reviews/review-archive-table";
@@ -19,20 +19,18 @@ function parsePageParam(value: string | null): number {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
 }
 
-function filtersFromParams(params: URLSearchParams): ReviewFilters {
-  return {
-    query: params.get("q")?.trim() || "",
-    sentiment: (params.get("sentiment") as ReviewFilters["sentiment"]) || "",
-    dateFrom: params.get("dateFrom") || "",
-    dateTo: params.get("dateTo") || "",
-  };
+interface ReviewsDashboardProps {
+  initialPage: number;
+  initialFilters: ReviewFilters;
 }
 
-export function ReviewsDashboard() {
+export function ReviewsDashboard({
+  initialPage,
+  initialFilters,
+}: ReviewsDashboardProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const page = parsePageParam(searchParams.get("page"));
-  const filters = filtersFromParams(searchParams);
+  const page = parsePageParam(String(initialPage));
+  const filters = initialFilters;
   const deferredQuery = useDeferredValue(filters.query);
   const activeFilters = { ...filters, query: deferredQuery };
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisRecord | null>(
@@ -40,7 +38,27 @@ export function ReviewsDashboard() {
   );
 
   function replaceParams(updates: Record<string, string | null>) {
-    const next = new URLSearchParams(searchParams.toString());
+    const next = new URLSearchParams();
+
+    if (filters.query) {
+      next.set("q", filters.query);
+    }
+
+    if (filters.sentiment) {
+      next.set("sentiment", filters.sentiment);
+    }
+
+    if (filters.dateFrom) {
+      next.set("dateFrom", filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+      next.set("dateTo", filters.dateTo);
+    }
+
+    if (page > 1) {
+      next.set("page", String(page));
+    }
 
     for (const [key, value] of Object.entries(updates)) {
       if (value) {
@@ -177,14 +195,10 @@ export function ReviewsDashboard() {
         </section>
       </div>
 
-      <ArticleReviewModal
+      <ArticleReviewFlow
         article={selectedAnalysis?.article ?? null}
-        analysis={selectedAnalysis}
-        mode="done"
         isOpen={Boolean(selectedAnalysis)}
-        isRetrying={false}
         onClose={() => setSelectedAnalysis(null)}
-        onRetry={() => undefined}
       />
     </main>
   );

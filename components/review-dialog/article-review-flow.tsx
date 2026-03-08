@@ -50,7 +50,7 @@ export function ArticleReviewFlow({
     }
 
     reset();
-    mutate({ article });
+    mutate({ article, retry: false, refresh: false });
   }, [article, isOpen, mutate, reset]);
 
   // Poll GET /api/result/[id] while the analysis is pending or processing.
@@ -120,7 +120,20 @@ export function ArticleReviewFlow({
     }
 
     reset();
-    mutate({ article });
+    mutate({ article, retry: true, refresh: false });
+  }
+
+  function handleRefresh() {
+    if (!article) {
+      return;
+    }
+
+    if (jobId) {
+      queryClient.removeQueries({ queryKey: ["result", jobId], exact: true });
+    }
+
+    reset();
+    mutate({ article, retry: false, refresh: true });
   }
 
   function handleClose() {
@@ -138,9 +151,10 @@ export function ArticleReviewFlow({
       analysis={analysisForModal}
       mode={mode}
       isOpen={isOpen}
-      isRetrying={isPending}
+      isActionPending={isPending}
       onClose={handleClose}
       onRetry={handleRetry}
+      onRefresh={handleRefresh}
     />
   );
 }

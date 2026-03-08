@@ -88,6 +88,31 @@ export async function markAnalysisProcessing(
   return document ? parseAnalysisDocument(document) : null;
 }
 
+export async function claimAnalysisForProcessing(input: {
+  id: string;
+  allowDone?: boolean;
+}): Promise<AnalysisDocument | null> {
+  const collection = await getAnalysesCollection();
+  const document = await collection.findOneAndUpdate(
+    {
+      _id: input.id,
+      status: {
+        $in: input.allowDone ? ["pending", "error", "done"] : ["pending", "error"],
+      },
+    },
+    {
+      $set: {
+        status: "processing",
+        updatedAt: new Date(),
+        errorMessage: null,
+      },
+    },
+    { returnDocument: "after" },
+  );
+
+  return document ? parseAnalysisDocument(document) : null;
+}
+
 export async function markAnalysisDone(input: {
   id: string;
   summary: string;

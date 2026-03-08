@@ -36,6 +36,8 @@ export const newsArticleSchema = z.object({
 
 export const analyzeBodySchema = z.object({
   article: newsArticleSchema,
+  retry: z.boolean().optional().default(false),
+  refresh: z.boolean().optional().default(false),
 });
 
 export const articleAnalysisSchema = z.object({

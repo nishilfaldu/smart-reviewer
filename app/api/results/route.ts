@@ -17,12 +17,12 @@ function parsePage(value: string | null): number {
   return parsed;
 }
 
-function parseOptionalDate(value: string | null): Date | null {
+function parseOptionalIsoDate(value: string | null): Date | null {
   if (!value) {
     return null;
   }
 
-  const date = new Date(`${value}T00:00:00.000Z`);
+  const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return null;
@@ -39,8 +39,8 @@ export async function GET(request: Request) {
   const sentiment = sentimentParam
     ? sentimentSchema.safeParse(sentimentParam)
     : null;
-  const dateFrom = parseOptionalDate(searchParams.get("dateFrom"));
-  const dateTo = parseOptionalDate(searchParams.get("dateTo"));
+  const publishedFrom = parseOptionalIsoDate(searchParams.get("publishedFrom"));
+  const publishedTo = parseOptionalIsoDate(searchParams.get("publishedTo"));
 
   if (sentimentParam && !sentiment?.success) {
     return NextResponse.json(
@@ -49,16 +49,16 @@ export async function GET(request: Request) {
     );
   }
 
-  if (searchParams.get("dateFrom") && !dateFrom) {
+  if (searchParams.get("publishedFrom") && !publishedFrom) {
     return NextResponse.json(
-      { error: "Invalid dateFrom filter" },
+      { error: "Invalid publishedFrom filter" },
       { status: 400 },
     );
   }
 
-  if (searchParams.get("dateTo") && !dateTo) {
+  if (searchParams.get("publishedTo") && !publishedTo) {
     return NextResponse.json(
-      { error: "Invalid dateTo filter" },
+      { error: "Invalid publishedTo filter" },
       { status: 400 },
     );
   }
@@ -69,10 +69,8 @@ export async function GET(request: Request) {
       pageSize: RESULTS_PAGE_SIZE,
       query,
       sentiment: sentiment?.success ? sentiment.data : undefined,
-      dateFrom: dateFrom ?? undefined,
-      dateTo: dateTo
-        ? new Date(`${searchParams.get("dateTo")}T23:59:59.999Z`)
-        : undefined,
+      dateFrom: publishedFrom ?? undefined,
+      dateTo: publishedTo ?? undefined,
     });
 
     return NextResponse.json(

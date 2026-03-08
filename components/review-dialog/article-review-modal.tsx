@@ -21,9 +21,10 @@ interface ArticleReviewModalProps {
   analysis: AnalysisRecord | null;
   mode: ArticleReviewMode;
   isOpen: boolean;
-  isRetrying: boolean;
+  isActionPending: boolean;
   onClose: () => void;
   onRetry: () => void;
+  onRefresh: () => void;
 }
 
 export function ArticleReviewModal({
@@ -31,9 +32,10 @@ export function ArticleReviewModal({
   analysis,
   mode,
   isOpen,
-  isRetrying,
+  isActionPending,
   onClose,
   onRetry,
+  onRefresh,
 }: ArticleReviewModalProps) {
   if (!article) {
     return null;
@@ -49,8 +51,6 @@ export function ArticleReviewModal({
       }}
     >
       <BaseDialogContent className="h-[min(92vh,920px)] max-w-6xl min-h-0">
-        <BaseDialogClose />
-
         <div className="grid h-full min-h-0 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
           <div className="flex min-h-0 flex-col border-b border-slate-200 bg-slate-950 text-white lg:border-b-0 lg:border-r">
             <div className="shrink-0 overflow-hidden">
@@ -115,7 +115,22 @@ export function ArticleReviewModal({
 
           <div className="min-h-0 bg-white">
             <div className="h-full overflow-y-scroll overscroll-contain">
-              <div className="flex min-h-full flex-col gap-6 p-6 pb-16 md:p-8 md:pb-20">
+              <div className="sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur md:px-8">
+                {mode === "done" ? (
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={isActionPending}
+                    className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,_#0f172a_0%,_#0369a1_100%)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(14,165,233,0.24)] transition hover:shadow-[0_16px_40px_rgba(14,165,233,0.32)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isActionPending ? "Refreshing..." : "Refresh review"}
+                  </button>
+                ) : null}
+
+                <BaseDialogClose className="static border-slate-200 bg-slate-50 px-4 py-2.5 text-sm tracking-[0.18em] text-slate-700 hover:bg-white" />
+              </div>
+
+              <div className="flex min-h-full flex-col gap-6 p-6 pb-16 md:px-8 md:pb-20 md:pt-6">
                 {mode === "opening" || mode === "processing" ? (
                   <ReviewProgressState mode={mode} />
                 ) : null}
@@ -123,13 +138,16 @@ export function ArticleReviewModal({
                 {mode === "error" ? (
                   <ReviewErrorState
                     errorMessage={analysis?.errorMessage}
-                    isRetrying={isRetrying}
+                    isActionPending={isActionPending}
                     onRetry={onRetry}
                   />
                 ) : null}
 
                 {mode === "done" ? (
-                  <ReviewCompletedState article={article} analysis={analysis} />
+                  <ReviewCompletedState
+                    article={article}
+                    analysis={analysis}
+                  />
                 ) : null}
               </div>
             </div>

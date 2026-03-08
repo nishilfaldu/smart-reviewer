@@ -12,6 +12,38 @@ interface JsonError {
   error?: string;
 }
 
+function toUtcBoundaryIso(value: string, endOfDay: boolean): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  const localDate = new Date(
+    year,
+    month - 1,
+    day,
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0,
+  );
+
+  if (
+    Number.isNaN(localDate.getTime()) ||
+    localDate.getFullYear() !== year ||
+    localDate.getMonth() !== month - 1 ||
+    localDate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return localDate.toISOString();
+}
+
 async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
 
@@ -43,6 +75,8 @@ export function fetchNews(
 
 export function analyzeNewsArticle(input: {
   article: NewsArticle;
+  retry?: boolean;
+  refresh?: boolean;
 }): Promise<AnalyzeResponse> {
   return readJson<AnalyzeResponse>("/api/analyze", {
     method: "POST",
@@ -74,11 +108,19 @@ export function fetchCompletedAnalyses(input: {
   }
 
   if (input.filters.dateFrom) {
-    searchParams.set("dateFrom", input.filters.dateFrom);
+    const publishedFrom = toUtcBoundaryIso(input.filters.dateFrom, false);
+
+    if (publishedFrom) {
+      searchParams.set("publishedFrom", publishedFrom);
+    }
   }
 
   if (input.filters.dateTo) {
-    searchParams.set("dateTo", input.filters.dateTo);
+    const publishedTo = toUtcBoundaryIso(input.filters.dateTo, true);
+
+    if (publishedTo) {
+      searchParams.set("publishedTo", publishedTo);
+    }
   }
 
   return readJson<PaginatedAnalysisResult>(

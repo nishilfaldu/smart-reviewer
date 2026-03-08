@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ArticleList } from "@/components/articles/article-list";
 import { ArticleReviewFlow } from "@/components/review-dialog/article-review-flow";
@@ -57,6 +57,10 @@ export function SmartReviewerDashboard({
   const newsResult = articlesQuery.data;
   const articles = newsResult?.articles ?? [];
   const isSearching = articlesQuery.isPending || articlesQuery.isFetching;
+
+  useEffect(() => {
+    setSearchInput(submittedQuery);
+  }, [submittedQuery]);
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -3,7 +3,6 @@ import { after, NextResponse } from "next/server";
 import {
   createPendingAnalysis,
   getAnalysisById,
-  markAnalysisProcessing,
   syncAnalysisArticle,
 } from "@/lib/analysis-repository";
 import { startAnalysisJob } from "@/lib/analyze-job";
@@ -32,6 +31,8 @@ export async function POST(request: Request) {
   }
 
   const article = parsedBody.data.article;
+  const retry = parsedBody.data.retry;
+  const refresh = parsedBody.data.refresh;
   const title = article.title.trim();
   const rawUrl = article.url.trim();
   const articleContent = article.content.trim();
@@ -61,15 +62,7 @@ export async function POST(request: Request) {
       const synced = await syncAnalysisArticle({ id, article: normalizedArticle });
       let responseAnalysis = synced ?? existing;
 
-      if (responseAnalysis.status === "error") {
-        responseAnalysis =
-          (await markAnalysisProcessing(id)) ?? responseAnalysis;
-      }
-
-      if (
-        responseAnalysis.status !== "done" &&
-        responseAnalysis.status !== "processing"
-      ) {
+      if (responseAnalysis.status === "pending") {
         after(
           startAnalysisJob({
             id,
@@ -78,6 +71,44 @@ export async function POST(request: Request) {
             article: normalizedArticle,
           }),
         );
+      }
+
+      if (responseAnalysis.status === "error" && retry) {
+        after(
+          startAnalysisJob({
+            id,
+            title: normalizedArticle.title,
+            articleUrl,
+            article: normalizedArticle,
+            forceRefresh: false,
+          }),
+        );
+
+        responseAnalysis = {
+          ...responseAnalysis,
+          status: "processing",
+          updatedAt: new Date(),
+          errorMessage: null,
+        };
+      }
+
+      if (responseAnalysis.status === "done" && refresh) {
+        after(
+          startAnalysisJob({
+            id,
+            title: normalizedArticle.title,
+            articleUrl,
+            article: normalizedArticle,
+            forceRefresh: true,
+          }),
+        );
+
+        responseAnalysis = {
+          ...responseAnalysis,
+          status: "processing",
+          updatedAt: new Date(),
+          errorMessage: null,
+        };
       }
 
       return NextResponse.json(

@@ -1,8 +1,8 @@
 import {
+  claimAnalysisForProcessing,
   getAnalysisById,
   markAnalysisDone,
   markAnalysisFailed,
-  markAnalysisProcessing,
 } from "@/lib/analysis-repository";
 import { analyzeArticle } from "@/lib/ai";
 import type { NewsArticle } from "@/lib/types";
@@ -34,6 +34,7 @@ export async function startAnalysisJob(input: {
   title: string;
   articleUrl: string;
   article?: NewsArticle;
+  forceRefresh?: boolean;
 }): Promise<void> {
   // if (activeJobs.has(input.id)) {
   //   return;
@@ -41,17 +42,19 @@ export async function startAnalysisJob(input: {
   //
   // activeJobs.add(input.id);
   try {
-    const existing = await getAnalysisById(input.id);
+    const claimed = await claimAnalysisForProcessing({
+      id: input.id,
+      allowDone: input.forceRefresh,
+    });
+    const existing = claimed ?? (await getAnalysisById(input.id));
 
     if (!existing) {
       throw new Error("Analysis record not found");
     }
 
-    if (existing.status === "done" || existing.status === "processing") {
+    if (!claimed && (existing.status === "done" || existing.status === "processing")) {
       return;
     }
-
-    await markAnalysisProcessing(input.id);
 
     const articleText = (
       input.article?.content ??
