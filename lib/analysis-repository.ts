@@ -1,6 +1,6 @@
 import {
-  createPendingAnalysisDocument,
-  flattenArticleFields,
+  createProcessingAnalysisDocument,
+  getChangedArticleFields,
   parseAnalysisDocument,
   parseAnalysisDocuments,
 } from "@/lib/analysis-document";
@@ -26,60 +26,46 @@ export async function getAnalysisById(
   return document ? parseAnalysisDocument(document) : null;
 }
 
-export async function createPendingAnalysis(input: {
+export async function createProcessingAnalysis(input: {
   id: string;
   article: NewsArticle;
 }): Promise<AnalysisDocument> {
   const collection = await getAnalysesCollection();
-  const document = createPendingAnalysisDocument(input);
-
-  await collection.updateOne(
+  const document = await collection.findOneAndUpdate(
     { _id: input.id },
     {
-      $setOnInsert: document,
+      $setOnInsert: createProcessingAnalysisDocument(input),
     },
-    { upsert: true },
+    { upsert: true, returnDocument: "after" },
   );
 
-  const stored = await collection.findOne({ _id: input.id });
-
-  if (!stored) {
+  if (!document) {
     throw new Error("Failed to create analysis record");
   }
 
-  return parseAnalysisDocument(stored);
+  return parseAnalysisDocument(document);
 }
 
 export async function syncAnalysisArticle(input: {
-  id: string;
+  analysis: AnalysisDocument;
   article: NewsArticle;
 }): Promise<AnalysisDocument | null> {
+  const updates = getChangedArticleFields({
+    existing: input.analysis,
+    article: input.article,
+  });
+
+  if (!Object.keys(updates).length) {
+    return input.analysis;
+  }
+
   const collection = await getAnalysesCollection();
   const document = await collection.findOneAndUpdate(
-    { _id: input.id },
+    { _id: input.analysis._id },
     {
       $set: {
-        ...flattenArticleFields(input.article),
+        ...updates,
         updatedAt: new Date(),
-      },
-    },
-    { returnDocument: "after" },
-  );
-
-  return document ? parseAnalysisDocument(document) : null;
-}
-
-export async function markAnalysisProcessing(
-  id: string,
-): Promise<AnalysisDocument | null> {
-  const collection = await getAnalysesCollection();
-  const document = await collection.findOneAndUpdate(
-    { _id: id },
-    {
-      $set: {
-        status: "processing",
-        updatedAt: new Date(),
-        errorMessage: null,
       },
     },
     { returnDocument: "after" },
@@ -89,19 +75,25 @@ export async function markAnalysisProcessing(
 }
 
 export async function claimAnalysisForProcessing(input: {
-  id: string;
+  analysis: AnalysisDocument;
+  article: NewsArticle;
   allowDone?: boolean;
 }): Promise<AnalysisDocument | null> {
   const collection = await getAnalysesCollection();
+  const articleUpdates = getChangedArticleFields({
+    existing: input.analysis,
+    article: input.article,
+  });
   const document = await collection.findOneAndUpdate(
     {
-      _id: input.id,
+      _id: input.analysis._id,
       status: {
         $in: input.allowDone ? ["pending", "error", "done"] : ["pending", "error"],
       },
     },
     {
       $set: {
+        ...articleUpdates,
         status: "processing",
         updatedAt: new Date(),
         errorMessage: null,

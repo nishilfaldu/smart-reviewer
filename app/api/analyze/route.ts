@@ -1,10 +1,6 @@
 import { after, NextResponse } from "next/server";
 
-import {
-  createPendingAnalysis,
-  getAnalysisById,
-  syncAnalysisArticle,
-} from "@/lib/analysis-repository";
+import { ensureAnalysis } from "@/lib/analysis-service";
 import { startAnalysisJob } from "@/lib/analyze-job";
 import { createArticleId, normalizeArticleUrl } from "@/lib/article-id";
 import { analyzeBodySchema } from "@/lib/schemas";
@@ -31,8 +27,7 @@ export async function POST(request: Request) {
   }
 
   const article = parsedBody.data.article;
-  const retry = parsedBody.data.retry;
-  const refresh = parsedBody.data.refresh;
+  const reanalyze = parsedBody.data.reanalyze;
   const title = article.title.trim();
   const rawUrl = article.url.trim();
   const articleContent = article.content.trim();
@@ -56,93 +51,28 @@ export async function POST(request: Request) {
       },
     };
     const id = createArticleId(articleUrl);
-    const existing = await getAnalysisById(id);
+    const result = await ensureAnalysis({
+      id,
+      article: normalizedArticle,
+      reanalyze,
+    });
 
-    if (existing) {
-      const synced = await syncAnalysisArticle({ id, article: normalizedArticle });
-      let responseAnalysis = synced ?? existing;
-
-      if (responseAnalysis.status === "pending") {
-        after(
-          startAnalysisJob({
-            id,
-            title: normalizedArticle.title,
-            articleUrl,
-            article: normalizedArticle,
-          }),
-        );
-      }
-
-      if (responseAnalysis.status === "error" && retry) {
-        after(
-          startAnalysisJob({
-            id,
-            title: normalizedArticle.title,
-            articleUrl,
-            article: normalizedArticle,
-            forceRefresh: false,
-          }),
-        );
-
-        responseAnalysis = {
-          ...responseAnalysis,
-          status: "processing",
-          updatedAt: new Date(),
-          errorMessage: null,
-        };
-      }
-
-      if (responseAnalysis.status === "done" && refresh) {
-        after(
-          startAnalysisJob({
-            id,
-            title: normalizedArticle.title,
-            articleUrl,
-            article: normalizedArticle,
-            forceRefresh: true,
-          }),
-        );
-
-        responseAnalysis = {
-          ...responseAnalysis,
-          status: "processing",
-          updatedAt: new Date(),
-          errorMessage: null,
-        };
-      }
-
-      return NextResponse.json(
-        {
+    if (result.shouldStartJob) {
+      after(
+        startAnalysisJob({
           id,
-          analysis: serializeAnalysis(responseAnalysis),
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        },
+          article: normalizedArticle,
+        }),
       );
     }
-
-    await createPendingAnalysis({ id, article: normalizedArticle });
-    after(
-      startAnalysisJob({
-        id,
-        title,
-        articleUrl,
-        article: normalizedArticle,
-      }),
-    );
-
-    const pending = await getAnalysisById(id);
 
     return NextResponse.json(
       {
         id,
-        analysis: pending ? serializeAnalysis(pending) : undefined,
+        analysis: serializeAnalysis(result.analysis),
       },
       {
-        status: 202,
+        status: result.statusCode,
         headers: {
           "Cache-Control": "no-store",
         },

@@ -75,8 +75,7 @@ export function fetchNews(
 
 export function analyzeNewsArticle(input: {
   article: NewsArticle;
-  retry?: boolean;
-  refresh?: boolean;
+  reanalyze?: boolean;
 }): Promise<AnalyzeResponse> {
   return readJson<AnalyzeResponse>("/api/analyze", {
     method: "POST",

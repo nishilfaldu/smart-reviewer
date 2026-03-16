@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -11,41 +11,15 @@ import { SearchForm } from "@/components/search/search-form";
 import { fetchNews } from "@/lib/api-client";
 import type { NewsArticle } from "@/lib/types";
 
-function parsePageParam(value: string | null): number {
-  const parsed = Number.parseInt(value ?? "1", 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
-}
-
-export function SmartReviewerDashboard({
-  initialQuery,
-}: {
-  initialQuery: string;
-}) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const submittedQuery = searchParams.get("q")?.trim() || "";
-  const newsPage = parsePageParam(searchParams.get("page"));
-  const [searchInput, setSearchInput] = useState(initialQuery);
+export function SmartReviewerDashboard() {
+  const [{ q: submittedQuery, page: newsPage }, setSearchParams] =
+    useQueryStates({
+      q: parseAsString.withDefault(""),
+      page: parseAsInteger.withDefault(1)
+    });
+  const [searchInput, setSearchInput] = useState(submittedQuery);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const replaceParams = useCallback(
-    (updates: Record<string, string | null>) => {
-      const next = new URLSearchParams(searchParams.toString());
-
-      for (const [key, value] of Object.entries(updates)) {
-        if (value) {
-          next.set(key, value);
-        } else {
-          next.delete(key);
-        }
-      }
-
-      const qs = next.toString();
-      router.replace(qs ? `/?${qs}` : "/", { scroll: false });
-    },
-    [router, searchParams],
-  );
 
   const articlesQuery = useQuery({
     queryKey: ["news", submittedQuery, newsPage],
@@ -62,22 +36,32 @@ export function SmartReviewerDashboard({
     setSearchInput(submittedQuery);
   }, [submittedQuery]);
 
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    replaceParams({ q: searchInput.trim() || null, page: null });
-  }
+  const handleSearchSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const nextQuery = searchInput.trim();
 
-  function handleQueryChange(value: string) {
-    setSearchInput(value);
+      void setSearchParams({
+        q: nextQuery || null,
+        page: 1,
+      });
+    },
+    [searchInput, setSearchParams],
+  );
 
-    if (!value.trim()) {
-      replaceParams({ q: null, page: null });
-    }
-  }
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+    },
+    [],
+  );
 
-  function handlePageChange(page: number) {
-    replaceParams({ page: page > 1 ? String(page) : null });
-  }
+  const handlePageChange = useCallback(
+    (page: number) => {
+      void setSearchParams({ page });
+    },
+    [setSearchParams],
+  );
 
   function handleOpenReview(article: NewsArticle) {
     setSelectedArticle(article);

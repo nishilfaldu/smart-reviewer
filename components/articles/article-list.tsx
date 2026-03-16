@@ -91,7 +91,7 @@ export function ArticleList({
         </div>
       ) : null}
 
-      {articles.length ? (
+      {query && articles.length ? (
         <div className="grid gap-4">
           {articles.map((article) => (
             <ArticleCard
@@ -105,12 +105,14 @@ export function ArticleList({
         </div>
       ) : null}
 
-      <PaginationControls
-        currentPage={currentPage}
-        totalPages={totalPages}
-        isLoading={isLoading}
-        onPageChange={onPageChange}
-      />
+      {query ? (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          isLoading={isLoading}
+          onPageChange={onPageChange}
+        />
+      ) : null}
     </section>
   );
 }
