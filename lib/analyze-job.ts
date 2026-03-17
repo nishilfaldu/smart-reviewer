@@ -1,6 +1,4 @@
 import {
-  claimAnalysisForProcessing,
-  getAnalysisById,
   markAnalysisDone,
   markAnalysisFailed,
 } from "@/lib/analysis-repository";
@@ -31,56 +29,22 @@ function toErrorMessage(error: unknown): string {
 
 export async function startAnalysisJob(input: {
   id: string;
-  title: string;
-  articleUrl: string;
-  article?: NewsArticle;
-  forceRefresh?: boolean;
+  article: NewsArticle;
 }): Promise<void> {
-  // if (activeJobs.has(input.id)) {
-  //   return;
-  // }
-  //
-  // activeJobs.add(input.id);
   try {
-    const claimed = await claimAnalysisForProcessing({
-      id: input.id,
-      allowDone: input.forceRefresh,
-    });
-    const existing = claimed ?? (await getAnalysisById(input.id));
-
-    if (!existing) {
-      throw new Error("Analysis record not found");
-    }
-
-    if (!claimed && (existing.status === "done" || existing.status === "processing")) {
-      return;
-    }
-
-    const articleText = (
-      input.article?.content ??
-      existing.articleContent ??
-      ""
-    ).trim();
-    const articleDescription = (
-      input.article?.description ??
-      existing.articleDescription ??
-      ""
-    ).trim();
-    const sourceName = (
-      input.article?.source.name ??
-      existing.sourceName ??
-      ""
-    ).trim();
+    const articleText = input.article.content.trim();
+    const articleDescription = input.article.description.trim();
+    const sourceName = input.article.source.name.trim();
 
     if (!articleText) {
       throw new Error("Article content is missing for analysis");
     }
 
     const analysis = await analyzeArticle({
-      title: input.title,
+      title: input.article.title,
       articleDescription,
       articleText: articleText.slice(0, 5_000),
-      articleUrl: input.articleUrl,
+      articleUrl: input.article.url,
       sourceName,
     });
 
@@ -92,7 +56,4 @@ export async function startAnalysisJob(input: {
   } catch (error) {
     await markAnalysisFailed(input.id, toErrorMessage(error));
   }
-  // finally {
-  //   activeJobs.delete(input.id);
-  // }
 }

@@ -46,7 +46,7 @@ Open [http://localhost:3000](http://localhost:3000).
 2. Open an article review.
 3. The app calls `POST /api/analyze` to ensure a review exists and to get its latest state.
 4. If the review is still running, the client polls until it reaches `done` or `error`.
-5. Completed reviews can be refreshed. Failed reviews can be retried.
+5. Completed or failed reviews can be reanalyzed on demand.
 
 ## API Summary
 
@@ -83,8 +83,7 @@ Request body:
       "country": "us"
     }
   },
-  "retry": false,
-  "refresh": false
+  "reanalyze": false
 }
 ```
 
@@ -92,8 +91,8 @@ Behavior:
 
 - New article: creates a pending record and starts the review
 - Existing `pending` or `processing` record: returns current status
-- Existing `error` record: returns current status unless `retry: true`
-- Existing `done` record: returns current status unless `refresh: true`
+- Existing `done` or `error` record: returns current status unless `reanalyze: true`
+- Existing article fields are only written back to MongoDB when the incoming payload differs from what is already stored
 
 ### `GET /api/result/[id]`
 

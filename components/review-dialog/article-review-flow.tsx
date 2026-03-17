@@ -16,12 +16,14 @@ import type { AnalysisRecord, NewsArticle } from "@/lib/types";
 
 interface ArticleReviewFlowProps {
   article: NewsArticle | null;
+  initialAnalysis?: AnalysisRecord | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function ArticleReviewFlow({
   article,
+  initialAnalysis = null,
   isOpen,
   onClose,
 }: ArticleReviewFlowProps) {
@@ -40,22 +42,22 @@ export function ArticleReviewFlow({
   const { data, error, isPending, mutate, reset } = analyzeMutation;
   const jobId = data?.id ?? null;
   const mutationAnalysis = data?.analysis ?? null;
+  const canHydrateFromInitialAnalysis =
+    initialAnalysis?.articleUrl === article?.url &&
+    initialAnalysis?.status === "done";
 
-  // On mount (modal opens for an article): fire POST /api/analyze.
-  // The server checks DB — returns existing record if found, starts a
-  // new job only when needed.
   useEffect(() => {
-    if (!isOpen || !article) {
+    if (!isOpen || !article || canHydrateFromInitialAnalysis) {
       return;
     }
 
     reset();
-    mutate({ article, retry: false, refresh: false });
-  }, [article, isOpen, mutate, reset]);
+    mutate({
+      article,
+      reanalyze: false,
+    });
+  }, [article, canHydrateFromInitialAnalysis, isOpen, mutate, reset]);
 
-  // Poll GET /api/result/[id] while the analysis is pending or processing.
-  // Polling stops when status reaches a terminal state (done / error) or
-  // when the modal unmounts.
   const analysisQuery = useQuery({
     queryKey: ["result", jobId],
     queryFn: () => fetchAnalysis(jobId as string),
@@ -63,6 +65,7 @@ export function ArticleReviewFlow({
       Boolean(jobId) &&
       isOpen &&
       !isPending &&
+      // if its terminal status, we don't need to poll anymore
       isTerminalStatus(mutationAnalysis) === false,
     refetchInterval: (query) => {
       const status = query.state.data?.analysis.status;
@@ -74,7 +77,12 @@ export function ArticleReviewFlow({
   const activeAnalysis =
     isPending || !article
       ? null
-      : pickActiveAnalysis(polledAnalysis, mutationAnalysis, article.url);
+      : pickActiveAnalysis(
+        polledAnalysis,
+        mutationAnalysis,
+        initialAnalysis,
+        article.url,
+      );
 
   const isLoadingReview = isPending && !activeAnalysis && isOpen;
   const hasPollingError =
@@ -120,7 +128,10 @@ export function ArticleReviewFlow({
     }
 
     reset();
-    mutate({ article, retry: true, refresh: false });
+    mutate({
+      article,
+      reanalyze: true,
+    });
   }
 
   function handleRefresh() {
@@ -133,7 +144,10 @@ export function ArticleReviewFlow({
     }
 
     reset();
-    mutate({ article, retry: false, refresh: true });
+    mutate({
+      article,
+      reanalyze: true,
+    });
   }
 
   function handleClose() {
@@ -166,6 +180,7 @@ function isTerminalStatus(analysis: AnalysisRecord | null | undefined): boolean 
 function pickActiveAnalysis(
   polled: AnalysisRecord | null,
   mutation: AnalysisRecord | null,
+  initial: AnalysisRecord | null,
   articleUrl: string,
 ): AnalysisRecord | null {
   if (polled?.articleUrl === articleUrl) {
@@ -174,6 +189,10 @@ function pickActiveAnalysis(
 
   if (mutation?.articleUrl === articleUrl) {
     return mutation;
+  }
+
+  if (initial?.articleUrl === articleUrl) {
+    return initial;
   }
 
   return null;

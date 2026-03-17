@@ -1,8 +1,9 @@
 "use client";
 
-import { useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ArticleReviewFlow } from "@/components/review-dialog/article-review-flow";
 import { ReviewArchiveCard } from "@/components/reviews/review-archive-card";
@@ -12,85 +13,91 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { fetchCompletedAnalyses } from "@/lib/api-client";
 import { getReviewsLoadErrorMessage } from "@/lib/display";
 import type { AnalysisRecord, ReviewFilters } from "@/lib/types";
-import { useState } from "react";
+import { sentimentSchema } from "@/lib/schemas";
 
-function parsePageParam(value: string | null): number {
-  const parsed = Number.parseInt(value ?? "1", 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
-}
+const reviewSentimentValues = ["", ...sentimentSchema.options] as const;
 
-interface ReviewsDashboardProps {
-  initialPage: number;
-  initialFilters: ReviewFilters;
-}
-
-export function ReviewsDashboard({
-  initialPage,
-  initialFilters,
-}: ReviewsDashboardProps) {
-  const router = useRouter();
-  const page = parsePageParam(String(initialPage));
-  const filters = initialFilters;
-  const deferredQuery = useDeferredValue(filters.query);
-  const activeFilters = { ...filters, query: deferredQuery };
+export function ReviewsDashboard() {
+  const [{ q, page, sentiment, dateFrom, dateTo }, setReviewParams] =
+    useQueryStates({
+      q: parseAsString.withDefault(""),
+      page: parseAsInteger.withDefault(1),
+      sentiment: parseAsStringLiteral(reviewSentimentValues).withDefault(""),
+      dateFrom: parseAsString.withDefault(""),
+      dateTo: parseAsString.withDefault(""),
+    });
+  const filters = useMemo<ReviewFilters>(
+    () => ({
+      query: q,
+      sentiment,
+      dateFrom,
+      dateTo,
+    }),
+    [dateFrom, dateTo, q, sentiment],
+  );
+  const [draftFilters, setDraftFilters] = useState<ReviewFilters>(filters);
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisRecord | null>(
     null,
   );
 
-  function replaceParams(updates: Record<string, string | null>) {
-    const next = new URLSearchParams();
+  useEffect(() => {
+    setDraftFilters(filters);
+  }, [filters]);
 
-    if (filters.query) {
-      next.set("q", filters.query);
-    }
-
-    if (filters.sentiment) {
-      next.set("sentiment", filters.sentiment);
-    }
-
-    if (filters.dateFrom) {
-      next.set("dateFrom", filters.dateFrom);
-    }
-
-    if (filters.dateTo) {
-      next.set("dateTo", filters.dateTo);
-    }
-
-    if (page > 1) {
-      next.set("page", String(page));
-    }
-
-    for (const [key, value] of Object.entries(updates)) {
-      if (value) {
-        next.set(key, value);
-      } else {
-        next.delete(key);
-      }
-    }
-
-    const qs = next.toString();
-    router.replace(qs ? `/reviews?${qs}` : "/reviews", { scroll: false });
+  function updateDraftFilter<Key extends keyof ReviewFilters>(
+    key: Key,
+    value: ReviewFilters[Key],
+  ) {
+    setDraftFilters((current) => ({
+      ...current,
+      [key]: value,
+    }));
   }
 
-  function updateFilter(key: string, value: string) {
-    replaceParams({ [key]: value || null, page: null });
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    void setReviewParams({
+      q: draftFilters.query.trim() || null,
+      sentiment: draftFilters.sentiment || null,
+      dateFrom: draftFilters.dateFrom || null,
+      dateTo: draftFilters.dateTo || null,
+      page: 1,
+    });
   }
 
   function clearFilters() {
-    router.replace("/reviews", { scroll: false });
+    const clearedFilters: ReviewFilters = {
+      query: "",
+      sentiment: "",
+      dateFrom: "",
+      dateTo: "",
+    };
+
+    setDraftFilters(clearedFilters);
+
+    void setReviewParams({
+      q: null,
+      sentiment: null,
+      dateFrom: null,
+      dateTo: null,
+      page: 1,
+    });
   }
 
   const reviewsQuery = useQuery({
     queryKey: [
       "completed-analyses",
       page,
-      activeFilters.query,
-      activeFilters.sentiment,
-      activeFilters.dateFrom,
-      activeFilters.dateTo,
+      filters.query,
+      filters.sentiment,
+      filters.dateFrom,
+      filters.dateTo,
     ],
-    queryFn: () => fetchCompletedAnalyses({ page, filters: activeFilters }),
+    queryFn: () => fetchCompletedAnalyses({ page, filters }),
     placeholderData: (previous) => previous,
+    // to avoid double queries, as react-query thinks data is stale the next moment its done fetching
+    staleTime: 30_000,
   });
 
   const results = reviewsQuery.data;
@@ -121,12 +128,11 @@ export function ReviewsDashboard({
         ) : null}
 
         <ReviewsFilters
-          filters={filters}
-          onQueryChange={(value) => updateFilter("q", value)}
-          onSentimentChange={(value) => updateFilter("sentiment", value)}
-          onDateFromChange={(value) => updateFilter("dateFrom", value)}
-          onDateToChange={(value) => updateFilter("dateTo", value)}
+          filters={draftFilters}
+          onFilterChange={updateDraftFilter}
+          onSubmit={applyFilters}
           onClear={clearFilters}
+          isSubmitting={reviewsQuery.isFetching}
         />
 
         <section className="space-y-4">
@@ -186,9 +192,7 @@ export function ReviewsDashboard({
                 currentPage={results?.page ?? page}
                 totalPages={results?.totalPages ?? 0}
                 isLoading={reviewsQuery.isFetching}
-                onPageChange={(p) =>
-                  replaceParams({ page: p > 1 ? String(p) : null })
-                }
+                onPageChange={(nextPage) => void setReviewParams({ page: nextPage })}
               />
             </div>
           ) : null}
@@ -197,6 +201,7 @@ export function ReviewsDashboard({
 
       <ArticleReviewFlow
         article={selectedAnalysis?.article ?? null}
+        initialAnalysis={selectedAnalysis}
         isOpen={Boolean(selectedAnalysis)}
         onClose={() => setSelectedAnalysis(null)}
       />

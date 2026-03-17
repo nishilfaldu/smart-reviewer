@@ -1,25 +1,31 @@
 
+import type { FormEvent } from "react";
+
 import type { ReviewFilters } from "@/lib/types";
 
 interface ReviewsFiltersProps {
   filters: ReviewFilters;
-  onQueryChange: (value: string) => void;
-  onSentimentChange: (value: ReviewFilters["sentiment"]) => void;
-  onDateFromChange: (value: string) => void;
-  onDateToChange: (value: string) => void;
+  onFilterChange: <Key extends keyof ReviewFilters>(
+    key: Key,
+    value: ReviewFilters[Key],
+  ) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onClear: () => void;
+  isSubmitting: boolean;
 }
 
 export function ReviewsFilters({
   filters,
-  onQueryChange,
-  onSentimentChange,
-  onDateFromChange,
-  onDateToChange,
+  onFilterChange,
+  onSubmit,
   onClear,
+  isSubmitting,
 }: ReviewsFiltersProps) {
   return (
-    <section className="rounded-[2rem] border border-white/70 bg-white/85 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-5">
+    <form
+      onSubmit={onSubmit}
+      className="rounded-[2rem] border border-white/70 bg-white/85 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-5"
+    >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_220px_180px_180px_auto]">
         <label className="space-y-2">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -28,7 +34,7 @@ export function ReviewsFilters({
           <input
             type="text"
             value={filters.query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={(event) => onFilterChange("query", event.target.value)}
             placeholder="Search title, publisher, description, or summary"
             className="min-h-12 w-full rounded-[1.2rem] border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400"
           />
@@ -42,7 +48,10 @@ export function ReviewsFilters({
             <select
               value={filters.sentiment}
               onChange={(event) =>
-                onSentimentChange(event.target.value as ReviewFilters["sentiment"])
+                onFilterChange(
+                  "sentiment",
+                  event.target.value as ReviewFilters["sentiment"],
+                )
               }
               className="min-h-12 w-full appearance-none rounded-[1.2rem] border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-900 outline-none transition focus:border-sky-400"
             >
@@ -77,7 +86,10 @@ export function ReviewsFilters({
             type="date"
             value={filters.dateFrom}
             onInput={(event) =>
-              onDateFromChange((event.target as HTMLInputElement).value)
+              onFilterChange(
+                "dateFrom",
+                (event.target as HTMLInputElement).value,
+              )
             }
             className="min-h-12 w-full rounded-[1.2rem] border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400"
           />
@@ -91,13 +103,20 @@ export function ReviewsFilters({
             type="date"
             value={filters.dateTo}
             onInput={(event) =>
-              onDateToChange((event.target as HTMLInputElement).value)
+              onFilterChange("dateTo", (event.target as HTMLInputElement).value)
             }
             className="min-h-12 w-full rounded-[1.2rem] border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400"
           />
         </label>
 
-        <div className="flex items-end">
+        <div className="flex items-end gap-3 lg:flex-col lg:items-stretch lg:justify-end">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="min-h-12 w-full rounded-[1.2rem] bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            {isSubmitting ? "Applying..." : "Apply filters"}
+          </button>
           <button
             type="button"
             onClick={onClear}
@@ -107,6 +126,6 @@ export function ReviewsFilters({
           </button>
         </div>
       </div>
-    </section>
+    </form>
   );
 }
