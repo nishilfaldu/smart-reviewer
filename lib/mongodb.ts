@@ -16,12 +16,12 @@ async function createClient(): Promise<MongoClient> {
   return client.connect();
 }
 
-export function getMongoClient(): Promise<MongoClient> {
+function getMongoClient(): Promise<MongoClient> {
   globalThis.__smartReviewerMongoClientPromise ??= createClient();
   return globalThis.__smartReviewerMongoClientPromise;
 }
 
-export async function getDatabase(): Promise<Db> {
+async function getDatabase(): Promise<Db> {
   const client = await getMongoClient();
   return client.db(getMongoDatabaseName());
 }

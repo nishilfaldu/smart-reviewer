@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { searchNews } from "@/lib/gnews";
-// import { getCachedNews, setCachedNews } from "@/lib/news-cache";
-
-// NOTE: A previous version of this route cached GNews responses in memory
-// using lib/news-cache.ts (globalThis Map with a 5-minute TTL). That works
-// well for long-lived Node processes where the same Map persists across
-// requests, but on Vercel serverless each invocation may start in a fresh
-// container with an empty cache. The cache implementation is kept in
-// lib/news-cache.ts for reference but is no longer used here.
 
 export const runtime = "nodejs";
 
@@ -35,21 +27,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // const cached = getCachedNews(query, page);
-    //
-    // if (cached) {
-    //   return NextResponse.json(
-    //     cached,
-    //     {
-    //       headers: {
-    //         "Cache-Control": "no-store",
-    //       },
-    //     },
-    //   );
-    // }
-
     const result = await searchNews({ query, page });
-    // setCachedNews(query, page, result);
 
     return NextResponse.json(
       result,

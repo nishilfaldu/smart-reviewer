@@ -46,7 +46,7 @@ function assignIfChanged<Key extends keyof FlattenedArticleFields>(input: {
   }
 }
 
-export function flattenArticleFields(
+function flattenArticleFields(
   article: NewsArticle,
 ): FlattenedArticleFields {
   return {
@@ -91,25 +91,6 @@ export function getChangedArticleFields(input: {
   }
 
   return updates;
-}
-
-export function createPendingAnalysisDocument(input: {
-  id: string;
-  article: NewsArticle;
-  now?: Date;
-}): AnalysisDocument {
-  const now = input.now ?? new Date();
-
-  return analysisDocumentSchema.parse({
-    _id: input.id,
-    ...flattenArticleFields(input.article),
-    summary: null,
-    sentiment: null,
-    status: "pending",
-    createdAt: now,
-    updatedAt: now,
-    errorMessage: null,
-  });
 }
 
 export function createProcessingAnalysisDocument(input: {
